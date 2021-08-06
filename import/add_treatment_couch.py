@@ -1,6 +1,5 @@
 """
 Assumes that the current scan is the TPCT
-Bug: If run multiple times, couch in wrong vertical pos'n
 """
 
 from connect import *
@@ -26,11 +25,15 @@ class add_treatment_couch:
             db = self.db
                 
             TableHeight = float(examination.GetStoredDicomTagValueForVerification(Group = 0x0018, Element = 0x1130)['TableHeight'])/10
-            
 
             if couch_type == 'Tomo':
-                ##add tomo couch
+                
+                ## check if couch already exists - if so, delete and display warning
+                ## if we don't delete first, it'll transform the existing couch and shift from correct location
                 couchROINames = [r"Couch Top", r"Couch Inner", r"Couch Ribbon", r"Base Exterior", r"Base Interior"]
+                self.delete_existing_couch(couchROINames)
+
+                ##add tomo couch
                 case.PatientModel.CreateStructuresFromTemplate(SourceTemplate=db.LoadTemplatePatientModel(templateName ='Tomo HDA Couch Extended', lockMode = 'Read'), 
                                                                 SourceExaminationName=r"TPCT1Jan21OMR", 
                                                                 SourceRoiNames=couchROINames, 
@@ -42,8 +45,13 @@ class add_treatment_couch:
                 contour_dx = 0
 
             elif couch_type == 'Elekta':
-                ##add elekta couch
+
+                ## check if couch already exists - if so, delete and display warning
+                ## if we don't delete first, it'll transform the existing couch and shift from correct location
                 couchROINames = [r"ElektaCouch"]
+                self.delete_existing_couch(couchROINames)
+
+                ##add elekta couch
                 case.PatientModel.CreateStructuresFromTemplate(SourceTemplate=db.LoadTemplatePatientModel(templateName = 'Elekta Couch Top', lockMode = 'Read'), 
                                                                 SourceExaminationName=r"CT 1", SourceRoiNames=couchROINames,
                                                                 SourcePoiNames=[], AssociateStructuresByName=True, 
@@ -73,6 +81,14 @@ class add_treatment_couch:
 
         elif couch_type == 'None':
             show_warning('No Couch Type selected.\nCouch structure not drawn.')
+
+    def delete_existing_couch(self, couchROINames):
+    	for couchROIName in couchROINames:
+    		if couchROIName in [x.Name for x in self.case.PatientModel.RegionsOfInterest]:
+    			self.case.PatientModel.RegionsOfInterest[couchROIName].DeleteRoi()
+    			print('deleting ', couchROIName)
+    			show_warning('Couch already existed.\nPrevious couch deleted and replaced.')
+    	return 1
 
     def do_QC(self):
         return -1
