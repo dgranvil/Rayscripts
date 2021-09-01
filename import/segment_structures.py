@@ -1,6 +1,6 @@
 from connect import *
 
-class segment_structures:
+class structure_segmentation:
     on_by_default = 0
     def __init__(self):
         self.case = get_current("Case")
@@ -8,7 +8,7 @@ class segment_structures:
         self.db = get_current("PatientDB")
         self.warnings = []
     
-    def do_task(self, site):  
+    def segment_structures(self, site):  
         if site == 'Head and Neck':
             self.db.RunOarSegmentation(ModelName='HN', Examinations = [self.examination.Name], Registrations = [None])
         elif site == 'Breast':
@@ -17,9 +17,8 @@ class segment_structures:
             show_warning('No DL segmenation for selected site')
 
 def do_task(**options):
-    print("\n\n\n**** DEEP LEARNING SEGMENTATION BEGINNING\n\n\n")
-    segment_structures().do_task(site = options['selected_site'])
-    print("\n\n\n**** DEEP LEARNING SEGMENTATION FINISHED\n\n\n")
+    structure_segmentation().segment_structures(site = options['selected_site'])
+
 
 
 

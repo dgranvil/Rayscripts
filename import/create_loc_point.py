@@ -7,7 +7,7 @@ class create_loc_point:
         self.case = get_current("Case")
         self.loc_point_name = self.find_current_loc_point()
 
-    def do_task(self):
+    def create_point(self):
         '''Create a localization point if it does not exist,
          add point geometry defined by imaging centre for each exam'''
                 
@@ -51,4 +51,4 @@ class create_loc_point:
         return Point
 
 def do_task(**options):
-	create_loc_point().do_task()
+	create_loc_point().create_point()
