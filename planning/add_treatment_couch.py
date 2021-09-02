@@ -15,23 +15,27 @@ class add_treatment_couch:
     
     def __init__(self):
         self.case = get_current('Case')
-        self.examination = get_current("Examination")
-        self.db = get_current("PatientDB")
-
-    def do_task(self, couch_type):
-
+        examination = get_current("Examination")
+        db = get_current("PatientDB")
+        self.plan = get_current('Plan')
+        ##Find couch type from plan
+        
+        couch_type = self.find_couch_type_to_add()
+       
+        ##Look whether it already exists
+            
+        couch_type = self.check_for_couch(couch_type)   
+        
+        
         if couch_type in ['Elekta', 'Tomo']:
-            case = self.case
-            examination = self.examination
-            db = self.db
-                
-            TableHeight = float(examination.GetStoredDicomTagValueForVerification(Group = 0x0018, Element = 0x1130)['TableHeight'])/10
+
+            TableHeight = float(examination.GetStoredDicomTagValueForVerification(Group = 0x0018, Element = 0x1130)['TableHeight'])/10.
             
 
             if couch_type == 'Tomo':
                 ##add tomo couch
                 couchROINames = [r"Couch Top", r"Couch Inner", r"Couch Ribbon", r"Base Exterior", r"Base Interior"]
-                case.PatientModel.CreateStructuresFromTemplate(SourceTemplate=db.LoadTemplatePatientModel(templateName ='Tomo HDA Couch Extended', lockMode = 'Read'), 
+                self.case.PatientModel.CreateStructuresFromTemplate(SourceTemplate=db.LoadTemplatePatientModel(templateName ='Tomo HDA Couch Extended', lockMode = 'Read'), 
                                                                 SourceExaminationName=r"TPCT1Jan21OMR", 
                                                                 SourceRoiNames=couchROINames, 
                                                                 SourcePoiNames=[], AssociateStructuresByName=True, 
@@ -44,7 +48,7 @@ class add_treatment_couch:
             elif couch_type == 'Elekta':
                 ##add elekta couch
                 couchROINames = [r"ElektaCouch"]
-                case.PatientModel.CreateStructuresFromTemplate(SourceTemplate=db.LoadTemplatePatientModel(templateName = 'Elekta Couch Top', lockMode = 'Read'), 
+                self.case.PatientModel.CreateStructuresFromTemplate(SourceTemplate=db.LoadTemplatePatientModel(templateName = 'Elekta Couch Top', lockMode = 'Read'), 
                                                                 SourceExaminationName=r"CT 1", SourceRoiNames=couchROINames,
                                                                 SourcePoiNames=[], AssociateStructuresByName=True, 
                                                                 TargetExamination=examination, InitializationOption="AlignImageCenters")
@@ -60,28 +64,53 @@ class add_treatment_couch:
             
             for ROI in couchROINames:
                 
-                case.PatientModel.RegionsOfInterest[ROI].TransformROI3D(Examination = examination,
+                self.case.PatientModel.RegionsOfInterest[ROI].TransformROI3D(Examination = examination,
                                                                         TransformationMatrix = TForm)
             # Extend couch model
             if couch_type == 'Elekta':
                 for ROI in couchROINames:
                 
                     #Extend couch geometries to encapsulate the entire CT1
-                    case.PatientModel.RegionsOfInterest[ROI].CreateMarginGeometry(Examination=examination, SourceRoiName=ROI, MarginSettings={ 'Type': "Expand", 'Superior': 15, 'Inferior': 15, 'Anterior': 0, 'Posterior': 0, 'Right': 0, 'Left': 0 })
+                    self.case.PatientModel.RegionsOfInterest[ROI].CreateMarginGeometry(Examination=examination, SourceRoiName=ROI, MarginSettings={ 'Type': "Expand", 'Superior': 15, 'Inferior': 15, 'Anterior': 0, 'Posterior': 0, 'Right': 0, 'Left': 0 })
 
-            return 1
+            #Set default dose grid size if not already done so
+            #Maybe these should be the one that are already selected.
+            current_voxel_size = self.plan.TreatmentCourse.TotalDose.InDoseGrid.VoxelSize
+            self.plan.SetDefaultDoseGrid(VoxelSize=current_voxel_size)
+            self.plan.TreatmentCourse.TotalDose.UpdateDoseGridStructures()
 
         elif couch_type == 'None':
-            show_warning('No Couch Type selected.\nCouch structure not drawn.')
+            show_warning('Error: no couch added, please add manually', level = 'warn')
 
-    def do_QC(self):
-        return -1
+    def find_couch_type_to_add(self):
 
+        machine_name = self.plan.BeamSets[0].MachineReference.MachineName
+        if machine_name in ['ElektaVersaHD']:
+            couch_type = 'Elekta'
+        elif machine_name in ['T_TomoTherapy_1', 'T_TomoTherapy_2']:
+            couch_type = 'Tomo'
+        else:
+            
+            couch_type = 'None'
+        return couch_type
+    
+    def check_for_couch(self, couch_type):
+        #make sure that couch is correct for treatment machine.
+        couch_structures = ['Couch Top', 'Couch Inner', 'Couch Ribbon',
+                            'Base Exterior', 'Base Interior', 'ElektaCouch']
+        ROI_names = [ROI.Name for ROI in self.case.PatientModel.RegionsOfInterest]
 
-
+        if sum([c in ROI_names for c in couch_structures]) >0:
+            
+            show_warning('Error: Couch structure may already be added, please delete or add manually')
+            couch_type = "None"
+        return couch_type
+    
+    
+# warnings = ['Please Select Treatment Unit']
 def do_task(**options):
     print("\n\n\n**** COUCH PLACEMENT BEGINNING\n\n\n")
-    add_treatment_couch().do_task(couch_type = options['Couch Type'])
+    add_treatment_couch()
     print("\n\n\n**** COUCH PLACEMENT FINISHED\n\n\n")
 
 

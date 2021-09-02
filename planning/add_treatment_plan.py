@@ -39,14 +39,11 @@ class add_treatment_plan :
         
     def do_task(self):
         ##create beam
-        # self.check_for_couch()
-        
+
         self.add_treatment_plan()
         
         self.add_treatment_beams()
-        # self.apply_clinical_goals()
-        # self.add_optimization_functions()
-        # self.run_optimization()
+
         
         print(self.warnings)
       
