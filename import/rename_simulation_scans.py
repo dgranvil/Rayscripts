@@ -1,18 +1,12 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Dec  8 16:49:13 2020
 
-@author: bywilson
-RayStation version: 10.0.1.52
+"""
 Bugs:
     ->need to make it not do anything if the stuff is already in a group
         try statements?
         
-    -> need to make it not fail when it has two unique names
+    ->need to make it not fail when it has two unique names
 
-
-DAL LIST
-	Rather than assuming we're correct and forcing rename, display window that shows name mappings. Have user verify correct or edit as needed.
+n assuming we're correct and forcing rename, display window that shows name mappings. Have user verify correct or edit as needed.
     
 """
 
@@ -24,7 +18,7 @@ from collections import defaultdict
 class rename_simulation_scans:
 
 
-	### Variables that should go in config!!
+	### Variables that should go in config
     MRNamePairs ={'SAG T1 SPACE':'ST1',  'AX T2 BLADE SPAIR (3mm)':'T2B' , 'AX VIBE DIXON':'VBC' }
     CTSimulators = ['HOST-76205','HOST-7055','PHILIPS-7055']
     on_by_default = 1
@@ -36,7 +30,7 @@ class rename_simulation_scans:
         self.patient = get_current('Patient')
         
         
-    def do_task(self):
+    def rename_scans(self):
 
         case = self.case      
         
@@ -77,7 +71,8 @@ class rename_simulation_scans:
                 
                 if dcmdata['SeriesModule']['SeriesDescription'] in self.MRNamePairs:
                     ending = self.MRNamePairs[dcmdata['SeriesModule']['SeriesDescription']]
-        
+                else:
+                    show_warning('One or more scan sets were not renamed, please check')
                 MRGroup[dcmdata['StudyModule']['StudyInstanceUID']].append(examination)
         
                 
@@ -233,13 +228,9 @@ class rename_simulation_scans:
         if scan_age>21:
             self.warnings.append("Most recent TPCT is %s days old"%scan_age)
 
-def do_task():
-	print("\n\n\n****RENAME SIMULATIONS SCANS BEGINNING\n\n\n")
-	rename_simulation_scans().do_task()
-	print("\n\n\n****RENAME SIMULATIONS SCANS FINISHED\n\n\n")
-##To do 
-    #Stand alone TPCT finder 
-    #
+def do_task(**options):
+    rename_simulation_scans().rename_scans()
+
 
 
 
