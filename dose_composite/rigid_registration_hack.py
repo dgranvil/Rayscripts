@@ -5,11 +5,7 @@ Created on Thu Feb 11 17:31:10 2021
 @author: bywilson
 """
 
-# from connect import *
 
-# class create_dose_composite():
-#     def create_hybrid_registration():
-        
 from connect import *
 
 
