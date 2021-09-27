@@ -1,11 +1,7 @@
 
 """
 To Do:
-
 Make MRNamePairs exhaustive for all protocols used
-
-May exclude findtpct function, and have user select and make primary the TPCT
-due to difficulty of maintainging logic for future scan Typs
 """
 
 # Notes:
@@ -27,28 +23,22 @@ from collections import defaultdict
 
 class rename_and_group_scans:
 
-
+    
     ### Variables that should go in config
     MRNamePairs ={'SAG T1 SPACE':'ST1',  'AX T2 BLADE SPAIR (3mm)':'T2B' , 'AX VIBE DIXON':'VBC' }
     CTSimulators = ['HOST-76205','HOST-7055','PHILIPS-7055']
     MRSimulators = ['AWP42514']
+    TomoUnits = ['0210511',' 0210266']
 
     
     def __init__(self):
         
         self.case = get_current("Case")
-        self.patient = get_current('Patient')
         
         
     def perform_renaming_and_grouping(self):
-             
-        # Attempt to automatically determine which scan is TPCT and set to primary
-        # This may be excluded in favour of 
-        TPCT = self.find_TPCT()
-        if TPCT != -1:
-            TPCT.SetPrimary()
-            
-        
+
+       
         # Create empty default dicts to append to if MR, PET, or 4D scans detected
         # These are the 3 types of imagesets that can be 'grouped' in RayStation
         MRGroup = defaultdict(list)
@@ -92,7 +82,10 @@ class rename_and_group_scans:
                 elif self.detect_tags(dcmdata, tags = ['FB']):
                     ending += '_FB'
 
-            
+            elif StationName in self.TomoUnits:
+            	scanType = 'MVCT'
+            	ending = ''
+
             # If exam is an MR
             #     If StationName is our MRSim, then name 'TPMR'
             #     If any other MR, then name 'MR'
@@ -106,7 +99,6 @@ class rename_and_group_scans:
                 if dcmdata['SeriesModule']['SeriesDescription'] in self.MRNamePairs:
                     ending = self.MRNamePairs[dcmdata['SeriesModule']['SeriesDescription']]
                 else:
-                    print('mr not renamed')
                     show_warning('One or more MR scan sets were not renamed, please check')
                 MRGroup[dcmdata['StudyModule']['StudyInstanceUID']].append(examination)
        
@@ -165,18 +157,18 @@ class rename_and_group_scans:
                                                       ExaminationNames=nameList)
 
 
-
     def examination_name(self,examination,scanType,ending = '',change_name = 1):
         months = ['JAN','FEB','MAR',"APR","MAY",'JUN','JUL','AUG','SEP', 'OCT',
              'NOV','DEC']
         DT = examination.GetExaminationDateTime()
          
         new_exam_name = '%s%2.2d%s%d%s'%(scanType,DT.Day, months[DT.Month-1],DT.Year, ending)
+        print('new name', new_exam_name, scanType, ending)
         if change_name:
             try:
                 examination.Name = new_exam_name
             except Exception as e:
-                print('Two scans of same name probably')
+                show_warning('Unable to correctly rename scan ' + examination.Name + '. This is likely due to multiple scans of the same type on the same day. Please rename manually.' )
                 new_exam_name = examination.Name
         return new_exam_name
 
@@ -184,79 +176,6 @@ class rename_and_group_scans:
     def detect_tags(self,dcmdata,tags):
         return sum([t in dcmdata['SeriesModule']['SeriesDescription'] for 
                     t in tags] ) 
-
-
-    def find_TPCT(self):
-        
-        TPCT_candidates = [exam for exam in self.case.Examinations 
-                           if exam.GetAcquisitionDataFromDicom()['EquipmentModule']['StationName'] 
-                           in self.CTSimulators]
-        
-        exam_dates = [exam.GetExaminationDateTime() for exam in TPCT_candidates]
-        if len(exam_dates) == 0:
-            show_warning('Could not Find TPCT, please select TPCT as current Primary image in image set library (patient modelling)')
-            return -1
-        
-        else:
-            most_recent_date = max(exam_dates).Date
-            
-            TPCT_candidates = [TPCT_candidates[i] for i, d in enumerate(exam_dates)
-                               if d.Date == most_recent_date]
-            
-            
-            ##if still than more than 1 candidate, look for OMAR scans
-            if len(TPCT_candidates) >1:
-                OMR_candidates = []
-                for exam in TPCT_candidates:
-                    dcmdata = exam.GetAcquisitionDataFromDicom()
-                    
-                    if self.detect_tags(dcmdata,tags = ['O-MAR','OMR','OMAR']):
-                        OMR_candidates.append(exam)
-                
-                if len(OMR_candidates):
-                    TPCT_candidates = OMR_candidates
-            
-            ##If still more than one candidate, look for veinous scans     
-            if len(TPCT_candidates)>1:
-                venous_Candidates = []
-                for exam in TPCT_candidates:
-                    dcmdata = exam.GetAcquisitionDataFromDicom()
-                    
-                    isVen = sum([OMRtag in dcmdata['SeriesModule']['SeriesDescription'] for 
-                                 OMRtag in ['Venous']] ) 
-                   
-                    if isVen:
-                        venous_Candidates.append(exam)
-                
-                if len(venous_Candidates):
-                    TPCT_candidates = venous_Candidates
-            
-            # If there's still more than 1 candidate maybe it's 4D, look for AIP
-            if len(TPCT_candidates)>1:
-                ct4d_candidates = []
-                for exam in TPCT_candidates:
-                    dcmdata = exam.GetAcquisitionDataFromDicom()
-                    if self.detect_tags(dcmdata, tags = ['AIP']):
-                        ct4d_candidates.append(exam)
-                if len(ct4d_candidates):
-                    TPCT_candidates = ct4d_candidates
-
-            # Lastly, look for DIBH/FB
-            if len(TPCT_candidates) > 1:
-                dibh_candidates = []
-                for exam in TPCT_candidates:
-                    dcmdata = exam.GetAcquisitionDataFromDicom()
-                    if self.detect_tags(dcmdata, tags = ['DIBH']):
-                        dibh_candidates.append(exam)
-                if len(dibh_candidates):
-                    TPCT_candidates = dibh_candidates
-
-
-
-            if len(TPCT_candidates)>1:
-                show_warning('More than one plausible TPCT, please ensure that correct one is set as primary')
-            return TPCT_candidates[0]
-
 
 
 def do_task(**options):

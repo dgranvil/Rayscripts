@@ -1,3 +1,7 @@
+#Does not currently work well due to bug in RayStation itself
+#DL autosegmentation is slow and crashes frequently when run by scripting
+#It works well when run using GUI, though
+
 from connect import *
 
 class structure_segmentation:

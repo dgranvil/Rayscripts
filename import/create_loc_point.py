@@ -1,3 +1,5 @@
+# Assumes current scan is TPCT 
+
 from connect import *
 
 class create_loc_point:
@@ -10,7 +12,7 @@ class create_loc_point:
     def create_point(self):
         '''Create a localization point if it does not exist,
          add point geometry defined by imaging centre for each exam'''
-                
+
         for exam in self.case.Examinations:
             print(self.loc_point_name)
             if self.loc_point_name == None:
@@ -49,6 +51,8 @@ class create_loc_point:
         centreY = corner + 0.5*pixSize*NumPix
         Point={ 'x': 0, 'y': centreY, 'z': 0 }
         return Point
+
+
 
 def do_task(**options):
 	create_loc_point().create_point()

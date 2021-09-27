@@ -1,13 +1,10 @@
 #This function assumes that the TPCT is current examination
-#Currently use await_user_input to have user verify this, and the existing reg check but it doesn't work well because it shows up behind Rayscripts gui
-#Ryan working on features that will improve this
-#Need to check for petCT and other imaging modality bugs
-
+#This will be enforced because the Set Primary CT script will be
+#forced to run prior to any scripts in the import Role being executed
 
 from connect import *
 from collections import defaultdict
 
-#warnings = ['TPCT must be current examination before running this script.']
 
 class register_images:
     def __init__(self):
@@ -23,38 +20,27 @@ class register_images:
             setup_uid = exam.EquipmentInfo.FrameOfReference
             if setup_uid != self.TPCT.EquipmentInfo.FrameOfReference:
                 unique_setup_reference_points[setup_uid].append(exam.Name)
-        print(unique_setup_reference_points)
 
+        if len(unique_setup_reference_points) == 0:
+            show_warning('No scansets found for registration to TPCT. Image registration not performed.')
         #For each unique frame of reference, choose best scan in set 
         #to use for registration to primary CT
         #'Best' scan is T1 followed by T2 for MR, CT for PetCT,
         #and just the first scan in the sequence for other/unknown scan type
-        for Scans in unique_setup_reference_points.values():
-                       
-            #First determine scan type (ie MR, PetCT, or other)
-            for scan in Scans:
-                registration_exists = self.check_for_existing_registration(self.TPCT.EquipmentInfo.FrameOfReference,self.case.Examinations[scan].EquipmentInfo.FrameOfReference)
-                print(registration_exists)
-                if registration_exists == True:
-                    break
-                elif registration_exists == False:
+        for group in unique_setup_reference_points.keys():
 
-                    if self.case.Examinations[scan].EquipmentInfo.Modality == 'MR':
-                        scanType = 'MR'
-                        bestImages = ['T1', 'T2']
-                        registrationScan = self.find_registration_scan(bestImages, Scans, scanType)
-                        break
-                    elif self.case.Examinations[scan].EquipmentInfo.Modality == 'Pet':
-                        scanType = 'PetCT'
-                        bestImages = ['CTFromPET']
-                        registrationScan = self.find_registration_scan(bestImages, Scans, scanType)
-                        break
-                    else:
-                        scanType = 'Unknown'
-                        registrationScan = Scans[0]
-                    
-            
-            if registration_exists == False:
+            registration_exists = self.check_for_existing_registration(self.TPCT.EquipmentInfo.FrameOfReference,self.case.Examinations[unique_setup_reference_points[group][0]].EquipmentInfo.FrameOfReference)
+            if registration_exists == True:
+                show_warning('Registration already exists for scans ' + ', '.join(unique_setup_reference_points[group]) + '.\nNew registration not performed for these.\nDelete existing registration before trying again.')
+            elif registration_exists == False:
+                
+                #Ask user to select scan only if there is more than one scan to choose from in the group
+                if len(unique_setup_reference_points[group]) > 1:
+                    registrationScan = self.user_registration_scan_choice_popup(group)
+                else:
+                    registrationScan = unique_setup_reference_points[group][0]
+
+
                 self.case.ComputeRigidImageRegistration(FloatingExaminationName=registrationScan, 
                                                         ReferenceExaminationName=self.TPCT.Name,
                                                         UseOnlyTranslations=False,
@@ -64,26 +50,41 @@ class register_images:
                                                         RegistrationName=None)
                 self.ui.TitleBar.MenuItem['Patient modeling'].Button_Patient_modeling.Click()
                 self.ui.TabControl_Modules.TabItem['Image registration'].Button_Image_registration.Click()
-                show_warning('Please check the registration before continuing')
             else:
                 show_warning('Registration already exists. New registration not performed.\nDelete existing registration before trying again.')
     
+  
 
+    def user_registration_scan_choice_popup(self, group):
+        #scan_dict is dictionary in which the keys are the string to display in the
+        #dropdown menu that describe the scans, and the values are the exam objects
+        #
+        #display_list is the list of keys (ie scan descriptors) in scan_dict
+        scan_dict = {}
+        display_list =['']
+        months = ['JAN','FEB','MAR',"APR","MAY",'JUN','JUL','AUG','SEP', 'OCT',
+             'NOV','DEC']
+        for exam in self.case.Examinations:
+            if exam.EquipmentInfo.FrameOfReference == group:
+                dcmdata = exam.GetAcquisitionDataFromDicom()
+                date_time = exam.GetExaminationDateTime()
+                date = str(date_time.Day) +  months[date_time.Month] + str(date_time.Year)
+                modality = exam.EquipmentInfo.Modality
+                name = exam.Name
+                description = dcmdata['SeriesModule']['SeriesDescription'] 
+                key = '  '.join((date, modality, name, description))
+                scan_dict[key] = exam
+        
+        #create the display list
+        for key in scan_dict.keys():
+            if key not in display_list:
+                display_list.append(key)
 
-    def find_registration_scan(self, bestImages, Scans, scanType):
-        for bestImage in bestImages:
-            for scan in Scans:
-                if scanType == 'MR':
-                    print('dal', bestImage, self.case.Examinations[scan].GetAcquisitionDataFromDicom()['SeriesModule']['SeriesDescription'] )
-                    if bestImage in self.case.Examinations[scan].GetAcquisitionDataFromDicom()['SeriesModule']['SeriesDescription']:
-                        registrationScan = scan                 
-                        break
-                elif scanType == 'Pet':
-                    if bestImage in self.case.Examinations[scan].EquipmentInfo.Modality:
-                        registrationScan = scan
-                        break
-        return registrationScan     
-            
+        message = modality + ' ' + date + ' Group: Please select which scan to use for registration for this scan group.'
+        registration_scan_popup = popup(message, options = display_list)
+        registrationScan = scan_dict[registration_scan_popup['option']].Name
+        return registrationScan
+
             
             
     def check_for_existing_registration(self, TPCT_FoR, scan_FoR):
